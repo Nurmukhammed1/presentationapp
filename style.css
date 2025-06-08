@@ -1,0 +1,516 @@
+:root {
+    --primary-color: #0066cc;
+    --secondary-color: #f8f9fa;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --dark-color: #343a40;
+    --light-gray: #e9ecef;
+    --border-color: #dee2e6;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #f5f6fa;
+    overflow: hidden;
+}
+
+/* Login Screen */
+.login-screen {
+    height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    padding: 3rem;
+    width: 100%;
+    max-width: 400px;
+}
+
+.login-card h1 {
+    color: var(--primary-color);
+    font-weight: 700;
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+/* Presentation List */
+.presentation-list-screen {
+    height: 100vh;
+    background: #f5f6fa;
+    overflow-y: auto;
+}
+
+.navbar-custom {
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 1rem 0;
+}
+
+.presentation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    padding: 2rem;
+}
+
+.presentation-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.presentation-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.presentation-card-body {
+    padding: 1.5rem;
+}
+
+.presentation-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+    color: var(--dark-color);
+}
+
+.presentation-meta {
+    color: #6c757d;
+    font-size: 0.9rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.create-presentation-card {
+    border: 2px dashed var(--border-color);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    transition: all 0.3s ease;
+}
+
+.create-presentation-card:hover {
+    border-color: var(--primary-color);
+    background: rgba(0, 102, 204, 0.05);
+}
+
+/* Main Editor Layout */
+.editor-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.top-toolbar {
+    background: white;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    z-index: 1000;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.toolbar-center {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.main-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* Slides Panel */
+.slides-panel {
+    width: 200px;
+    background: white;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.slides-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--secondary-color);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--dark-color);
+}
+
+.slides-list {
+    flex: 1;
+    padding: 0.5rem;
+}
+
+.slide-thumbnail {
+    background: white;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    aspect-ratio: 16/9;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.slide-thumbnail:hover {
+    border-color: var(--primary-color);
+}
+
+.slide-thumbnail.active {
+    border-color: var(--primary-color);
+    background: rgba(0, 102, 204, 0.05);
+}
+
+.slide-number {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 0.7rem;
+    color: #6c757d;
+}
+
+/* Canvas Area */
+.canvas-container {
+    flex: 1;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    overflow: auto;
+}
+
+.slide-canvas {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    position: relative;
+    width: 800px;
+    height: 600px;
+    overflow: hidden;
+}
+
+/* Users Panel */
+.users-panel {
+    width: 250px;
+    background: white;
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+}
+
+.users-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--secondary-color);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--dark-color);
+}
+
+.users-list {
+    flex: 1;
+    padding: 0.5rem;
+    overflow-y: auto;
+}
+
+.user-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    background: var(--secondary-color);
+    transition: all 0.2s ease;
+}
+
+.user-item:hover {
+    background: #e9ecef;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+.user-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.user-role {
+    font-size: 0.7rem;
+    color: #6c757d;
+}
+
+.role-badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+.role-badge.creator {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.role-badge.editor {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.role-badge.viewer {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Text Block Styles */
+.text-block {
+    position: absolute;
+    border: 2px dashed transparent;
+    min-width: 100px;
+    min-height: 40px;
+    cursor: move;
+    transition: border-color 0.2s ease;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.text-block:hover {
+    border-color: var(--primary-color);
+}
+
+.text-block.selected {
+    border-color: var(--primary-color);
+    border-style: solid;
+}
+
+.text-block .resize-handle {
+    position: absolute;
+    bottom: -5px;
+    right: -5px;
+    width: 10px;
+    height: 10px;
+    background: var(--primary-color);
+    cursor: se-resize;
+    border-radius: 2px;
+}
+
+.text-content {
+    outline: none;
+    min-height: 20px;
+    width: 100%;
+}
+
+/* Formatting Toolbar */
+.format-toolbar {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    display: none;
+    gap: 0.25rem;
+}
+
+.text-block.selected .format-toolbar {
+    display: flex;
+}
+
+.format-btn {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.format-btn:hover {
+    background: var(--light-gray);
+}
+
+.format-btn.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+/* Present Mode */
+.present-mode {
+    background: black;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.present-slide {
+    max-width: 90vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    position: relative;
+}
+
+.present-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 1rem;
+    background: rgba(0,0,0,0.7);
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+}
+
+.present-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: background-color 0.2s ease;
+}
+
+.present-btn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .slides-panel {
+        width: 150px;
+    }
+    
+    .users-panel {
+        width: 200px;
+    }
+    
+    .slide-canvas {
+        width: 100%;
+        max-width: 600px;
+        height: 450px;
+    }
+}
+
+/* Utility Classes */
+.btn-primary-custom {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-primary-custom:hover {
+    background: #0056b3;
+    border-color: #0056b3;
+    transform: translateY(-1px);
+}
+
+.btn-outline-primary-custom {
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    background: white;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-outline-primary-custom:hover {
+    background: var(--primary-color);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
