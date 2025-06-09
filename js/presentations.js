@@ -70,6 +70,7 @@ async function createPresentation() {
     }
 }
 
+// Initialize connection when user joins a presentation
 async function joinPresentation(presentationId) {
     try {
         const response = await fetch(`https://collab-slides.runasp.net/api/Presentations/${presentationId}/join`, {
@@ -91,12 +92,13 @@ async function joinPresentation(presentationId) {
             loadSlide(0);
             showEditor();
             
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({
-                    type: 'join_presentation',
-                    presentationId: currentPresentation.id,
-                    userId: currentUser.id
-                }));
+            // FIXED: Ensure SignalR connection before joining
+            if (!isConnected) {
+                await connectSignalR();
+            }
+            
+            if (isConnected) {
+                await joinPresentationSignalR(currentPresentation.id, currentUser.id);
             }
         }
     } catch (error) {

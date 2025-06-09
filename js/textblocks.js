@@ -1,24 +1,30 @@
-// Text Block Management
+// FIXED: Enhanced text block creation with real-time updates
 function addTextBlock() {
     if (!canEdit()) return;
     
     const textBlock = {
-        id: Date.now().toString(),
+        id: generateUniqueId(),
         type: 'textBlock',
-        x: 100,
-        y: 100,
+        x: 100 + (Math.random() * 200), // Randomize position slightly
+        y: 100 + (Math.random() * 200),
         width: 200,
         height: 60,
         content: 'Click to edit text...',
         fontSize: 16,
         fontWeight: 'normal',
         fontStyle: 'normal',
-        textAlign: 'left'
+        textAlign: 'left',
+        createdBy: currentUser.id,
+        timestamp: Date.now()
     };
     
+    // Create locally first (optimistic update)
     createTextBlockElement(textBlock);
     addToSlideContent(textBlock);
     selectTextBlock(textBlock.id);
+    
+    // Send to other users
+    sendTextBlockUpdate(textBlock);
 }
 
 function createTextBlockElement(textBlock) {
@@ -93,6 +99,9 @@ function selectTextBlock(id) {
     }
 }
 
+// FIXED: Better drag and resize with real-time updates
+let dragUpdateInterval;
+
 function startDrag(e, id) {
     if (!canEdit()) return;
     if (e.target.classList.contains('resize-handle')) return;
@@ -110,7 +119,23 @@ function startDrag(e, id) {
     element.style.zIndex = '1000';
     selectTextBlock(id);
     
+    // FIXED: Start real-time position updates during drag
+    startDragUpdates(id);
+    
     e.preventDefault();
+}
+
+function startDragUpdates(id) {
+    // Send position updates every 100ms during drag for smooth real-time movement
+    dragUpdateInterval = setInterval(() => {
+        if (isDragging && selectedTextBlock === id) {
+            const element = document.getElementById(`textBlock-${id}`);
+            if (element) {
+                const textBlock = extractTextBlockData(element, id);
+                sendTextBlockUpdate(textBlock);
+            }
+        }
+    }, 100);
 }
 
 function startResize(e, id) {
@@ -148,14 +173,25 @@ document.addEventListener('mousemove', (e) => {
 });
 
 document.addEventListener('mouseup', () => {
-    if (isDragging && selectedTextBlock) {
-        updateTextBlockPosition(selectedTextBlock);
-        const element = document.getElementById(`textBlock-${selectedTextBlock}`);
-        element.style.zIndex = 'auto';
+    if (isDragging) {
+        // Clear drag update interval
+        if (dragUpdateInterval) {
+            clearInterval(dragUpdateInterval);
+            dragUpdateInterval = null;
+        }
+        
+        if (selectedTextBlock) {
+            // Send final position update
+            updateTextBlockAndSync(selectedTextBlock);
+            const element = document.getElementById(`textBlock-${selectedTextBlock}`);
+            element.style.zIndex = 'auto';
+        }
     }
+    
     if (isResizing && selectedTextBlock) {
-        updateTextBlockSize(selectedTextBlock);
+        updateTextBlockAndSync(selectedTextBlock);
     }
+    
     isDragging = false;
     isResizing = false;
 });
@@ -207,12 +243,21 @@ function deleteTextBlock(id) {
     }
 }
 
-// Update functions with debouncing
-let updateTimeouts = {};
+// FIXED: Debounced updates with better timing
+let updateTimeouts = new Map();
+const DEBOUNCE_DELAY = 300; // Reduced for more responsive updates
 
 function debounceUpdate(id) {
-    clearTimeout(updateTimeouts[id]);
-    updateTimeouts[id] = setTimeout(() => updateTextBlockAndSync(id), 500);
+    if (updateTimeouts.has(id)) {
+        clearTimeout(updateTimeouts.get(id));
+    }
+    
+    const timeout = setTimeout(() => {
+        updateTextBlockAndSync(id);
+        updateTimeouts.delete(id);
+    }, DEBOUNCE_DELAY);
+    
+    updateTimeouts.set(id, timeout);
 }
 
 // Local update only (for real-time feedback)
@@ -258,32 +303,145 @@ function updateTextBlockSize(id) {
     updateTextBlockAndSync(id);
 }
 
-// Handle incoming text block updates from other users
+// FIXED: Enhanced text block update handling with conflict resolution
 function updateTextBlockFromRemote(textBlock) {
+    // Ignore if this is our own update
+    if (pendingUpdates.has(textBlock.id)) {
+        return;
+    }
+    
     const element = document.getElementById(`textBlock-${textBlock.id}`);
     if (!element) {
-        // Create new text block if it doesn't exist
+        // Create new text block
         createTextBlockElement(textBlock);
         addToSlideContent(textBlock);
         return;
     }
     
-    // Update existing text block
+    // FIXED: Check if user is currently editing this text block
+    const textContent = element.querySelector('.text-content');
+    const isBeingEdited = document.activeElement === textContent;
+    
+    if (isBeingEdited) {
+        // Show conflict indicator and queue update
+        showEditConflict(textBlock.id);
+        queueUpdate('textBlock', textBlock);
+        return;
+    }
+    
+    // Apply remote update
+    applyTextBlockUpdate(element, textBlock);
+    updateSlideContent(textBlock.id, textBlock);
+    
+    // Show brief indicator that content was updated by another user
+    showRemoteUpdateIndicator(textBlock.id);
+}
+
+function applyTextBlockUpdate(element, textBlock) {
+    // Update position and size
     element.style.left = textBlock.x + 'px';
     element.style.top = textBlock.y + 'px';
     element.style.width = textBlock.width + 'px';
     element.style.height = textBlock.height + 'px';
     
+    // Update content and styling
     const textContent = element.querySelector('.text-content');
-    if (textContent.innerHTML !== textBlock.content) {
-        textContent.innerHTML = textBlock.content;
-    }
-    
+    textContent.innerHTML = textBlock.content;
     textContent.style.fontSize = textBlock.fontSize + 'px';
     textContent.style.fontWeight = textBlock.fontWeight;
     textContent.style.fontStyle = textBlock.fontStyle;
     textContent.style.textAlign = textBlock.textAlign;
+}
+
+
+function generateUniqueId() {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function extractTextBlockData(element, id) {
+    const textContent = element.querySelector('.text-content');
+    return {
+        id: id,
+        type: 'textBlock',
+        x: parseInt(element.style.left),
+        y: parseInt(element.style.top),
+        width: parseInt(element.style.width),
+        height: parseInt(element.style.height),
+        content: textContent.innerHTML,
+        fontSize: parseInt(textContent.style.fontSize) || 16,
+        fontWeight: textContent.style.fontWeight || 'normal',
+        fontStyle: textContent.style.fontStyle || 'normal',
+        textAlign: textContent.style.textAlign || 'left',
+        timestamp: Date.now()
+    };
+}
+
+function queueUpdate(type, data) {
+    updateQueue.push({ type, data, timestamp: Date.now() });
+}
+
+function processQueuedUpdates() {
+    while (updateQueue.length > 0) {
+        const update = updateQueue.shift();
+        if (update.type === 'textBlock') {
+            sendTextBlockUpdate(update.data);
+        }
+    }
+}
+
+function handleConnectionFailure() {
+    reconnectAttempts++;
+    if (reconnectAttempts < maxReconnectAttempts) {
+        showConnectionStatus('Connection lost. Retrying...');
+        setTimeout(connectSignalR, 2000 * reconnectAttempts);
+    } else {
+        showConnectionStatus('Connection failed. Please refresh the page.');
+    }
+}
+
+function showConnectionStatus(message) {
+    // Create or update connection status indicator
+    let statusEl = document.getElementById('connectionStatus');
+    if (!statusEl) {
+        statusEl = document.createElement('div');
+        statusEl.id = 'connectionStatus';
+        statusEl.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #ffc107;
+            color: #000;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 9999;
+        `;
+        document.body.appendChild(statusEl);
+    }
     
-    // Update local slide content
-    updateSlideContent(textBlock.id, textBlock);
+    statusEl.textContent = message;
+    
+    if (message === 'Connected') {
+        statusEl.style.background = '#28a745';
+        statusEl.style.color = '#fff';
+        setTimeout(() => statusEl.remove(), 2000);
+    }
+}
+
+function showRemoteUpdateIndicator(textBlockId) {
+    const element = document.getElementById(`textBlock-${textBlockId}`);
+    if (element) {
+        element.style.boxShadow = '0 0 10px #007bff';
+        setTimeout(() => {
+            element.style.boxShadow = '';
+        }, 1000);
+    }
+}
+
+function showEditConflict(textBlockId) {
+    const element = document.getElementById(`textBlock-${textBlockId}`);
+    if (element) {
+        element.style.borderColor = '#dc3545';
+        element.title = 'Another user is editing this. Your changes will be applied when you finish editing.';
+    }
 }
