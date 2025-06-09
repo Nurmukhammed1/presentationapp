@@ -1,4 +1,4 @@
-// FIXED: Real-time SignalR Implementation
+//websockets.js
 let connection = null;
 let isConnected = false;
 let reconnectAttempts = 0;
@@ -112,7 +112,7 @@ function setupSignalRHandlers() {
     });
 }
 
-// FIXED: Proper SignalR method calls with error handling
+// FIXED: Proper SignalR method calls with error handling and correct GUID format
 async function joinPresentationSignalR(presentationId, userId) {
     if (!connection || connection.state !== signalR.HubConnectionState.Connected) {
         console.warn('Cannot join presentation - SignalR not connected');
@@ -120,8 +120,12 @@ async function joinPresentationSignalR(presentationId, userId) {
     }
     
     try {
-        await connection.invoke("JoinPresentation", presentationId, userId);
-        console.log('Successfully joined presentation:', presentationId);
+        // FIXED: Ensure IDs are in proper GUID format (string format)
+        const guidPresentationId = typeof presentationId === 'string' ? presentationId : presentationId.toString();
+        const guidUserId = typeof userId === 'string' ? userId : userId.toString();
+        
+        await connection.invoke("JoinPresentation", guidPresentationId, guidUserId);
+        console.log('Successfully joined presentation:', guidPresentationId);
         return true;
     } catch (err) {
         console.error('Failed to join presentation:', err);
@@ -135,8 +139,12 @@ async function leavePresentationSignalR(presentationId, userId) {
     }
     
     try {
-        await connection.invoke("LeavePresentation", presentationId, userId);
-        console.log('Left presentation:', presentationId);
+        // FIXED: Ensure IDs are in proper GUID format
+        const guidPresentationId = typeof presentationId === 'string' ? presentationId : presentationId.toString();
+        const guidUserId = typeof userId === 'string' ? userId : userId.toString();
+        
+        await connection.invoke("LeavePresentation", guidPresentationId, guidUserId);
+        console.log('Left presentation:', guidPresentationId);
     } catch (err) {
         console.error('Failed to leave presentation:', err);
     }
@@ -146,7 +154,7 @@ async function leavePresentationSignalR(presentationId, userId) {
 let pendingUpdates = new Map();
 let updateQueue = [];
 
-// FIXED: Updated sendTextBlockUpdate function to match C# hub expectations
+// FIXED: Updated sendTextBlockUpdate function with proper data types
 async function sendTextBlockUpdate(textBlock) {
     if (!connection || connection.state !== signalR.HubConnectionState.Connected) {
         console.warn('Cannot send update - SignalR not connected');
@@ -159,17 +167,31 @@ async function sendTextBlockUpdate(textBlock) {
         // Add to pending updates to prevent echo
         pendingUpdates.set(textBlock.id, Date.now());
         
-        // FIXED: Send as a single object that matches TextBlockUpdateData structure
+        // FIXED: Ensure all data types match C# expectations
         const updateData = {
-            presentationId: currentPresentation.id,
-            slideIndex: currentSlideIndex,
-            textBlock: textBlock,
-            userId: currentUser.id
+            presentationId: typeof currentPresentation.id === 'string' ? currentPresentation.id : currentPresentation.id.toString(),
+            slideIndex: parseInt(currentSlideIndex) || 0, // Ensure integer
+            textBlock: {
+                id: textBlock.id.toString(), // Ensure string
+                type: textBlock.type || "textBlock",
+                x: parseInt(textBlock.x) || 0, // Ensure integer
+                y: parseInt(textBlock.y) || 0, // Ensure integer
+                width: parseInt(textBlock.width) || 200, // Ensure integer
+                height: parseInt(textBlock.height) || 60, // Ensure integer
+                content: textBlock.content || "", // Ensure string
+                fontSize: parseInt(textBlock.fontSize) || 16, // Ensure integer
+                fontWeight: textBlock.fontWeight || "normal", // Ensure string
+                fontStyle: textBlock.fontStyle || "normal", // Ensure string
+                textAlign: textBlock.textAlign || "left" // Ensure string
+            },
+            userId: typeof currentUser.id === 'string' ? currentUser.id : currentUser.id.toString()
         };
+        
+        console.log('Sending text block update:', updateData); // Debug log
         
         await connection.invoke("UpdateTextBlock", updateData);
         
-        console.log('Text block update sent:', textBlock.id);
+        console.log('Text block update sent successfully:', textBlock.id);
         
         // Remove from pending after a delay
         setTimeout(() => {
@@ -178,6 +200,7 @@ async function sendTextBlockUpdate(textBlock) {
         
     } catch (err) {
         console.error('Failed to send text block update:', err);
+        console.error('Update data was:', updateData); // Debug log
         pendingUpdates.delete(textBlock.id);
         queueUpdate('textBlock', textBlock);
     }
@@ -278,4 +301,21 @@ function onTextBlockChanged(textBlock) {
     
     // Then send to SignalR for other users
     sendTextBlockUpdate(textBlock);
+}
+
+// FIXED: Helper function to ensure proper data types
+function sanitizeTextBlockData(textBlock) {
+    return {
+        id: textBlock.id ? textBlock.id.toString() : generateUniqueId(),
+        type: textBlock.type || "textBlock",
+        x: parseInt(textBlock.x) || 0,
+        y: parseInt(textBlock.y) || 0,
+        width: parseInt(textBlock.width) || 200,
+        height: parseInt(textBlock.height) || 60,
+        content: textBlock.content || "",
+        fontSize: parseInt(textBlock.fontSize) || 16,
+        fontWeight: textBlock.fontWeight || "normal",
+        fontStyle: textBlock.fontStyle || "normal",
+        textAlign: textBlock.textAlign || "left"
+    };
 }

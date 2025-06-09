@@ -1,20 +1,21 @@
-// FIXED: Enhanced text block creation with real-time updates
+//textblocks.js
 function addTextBlock() {
     if (!canEdit()) return;
     
+    // FIXED: Ensure all properties have correct data types
     const textBlock = {
         id: generateUniqueId(),
         type: 'textBlock',
-        x: 100 + (Math.random() * 200), // Randomize position slightly
-        y: 100 + (Math.random() * 200),
-        width: 200,
-        height: 60,
+        x: Math.floor(100 + (Math.random() * 200)), // Ensure integer
+        y: Math.floor(100 + (Math.random() * 200)), // Ensure integer
+        width: 200, // Integer
+        height: 60, // Integer
         content: 'Click to edit text...',
-        fontSize: 16,
+        fontSize: 16, // Integer
         fontWeight: 'normal',
         fontStyle: 'normal',
         textAlign: 'left',
-        createdBy: currentUser.id,
+        createdBy: currentUser.id.toString(), // Ensure string
         timestamp: Date.now()
     };
     
@@ -23,8 +24,9 @@ function addTextBlock() {
     addToSlideContent(textBlock);
     selectTextBlock(textBlock.id);
     
-    // Send to other users
-    sendTextBlockUpdate(textBlock);
+    // FIXED: Sanitize data before sending
+    const sanitizedTextBlock = sanitizeTextBlockData(textBlock);
+    sendTextBlockUpdate(sanitizedTextBlock);
 }
 
 function createTextBlockElement(textBlock) {
@@ -132,7 +134,8 @@ function startDragUpdates(id) {
             const element = document.getElementById(`textBlock-${id}`);
             if (element) {
                 const textBlock = extractTextBlockData(element, id);
-                sendTextBlockUpdate(textBlock);
+                const sanitizedTextBlock = sanitizeTextBlockData(textBlock);
+                sendTextBlockUpdate(sanitizedTextBlock);
             }
         }
     }, 100);
@@ -154,8 +157,8 @@ document.addEventListener('mousemove', (e) => {
         const element = document.getElementById(`textBlock-${selectedTextBlock}`);
         const canvasRect = document.getElementById('slideCanvas').getBoundingClientRect();
         
-        const newX = e.clientX - canvasRect.left - dragOffset.x;
-        const newY = e.clientY - canvasRect.top - dragOffset.y;
+        const newX = Math.floor(e.clientX - canvasRect.left - dragOffset.x);
+        const newY = Math.floor(e.clientY - canvasRect.top - dragOffset.y);
         
         element.style.left = Math.max(0, newX) + 'px';
         element.style.top = Math.max(0, newY) + 'px';
@@ -164,8 +167,8 @@ document.addEventListener('mousemove', (e) => {
         const canvasRect = document.getElementById('slideCanvas').getBoundingClientRect();
         const elementRect = element.getBoundingClientRect();
         
-        const newWidth = e.clientX - elementRect.left;
-        const newHeight = e.clientY - elementRect.top;
+        const newWidth = Math.floor(e.clientX - elementRect.left);
+        const newHeight = Math.floor(e.clientY - elementRect.top);
         
         element.style.width = Math.max(50, newWidth) + 'px';
         element.style.height = Math.max(20, newHeight) + 'px';
@@ -269,11 +272,11 @@ function updateTextBlockLocal(id) {
     const textBlock = {
         id: id,
         type: 'textBlock',
-        x: parseInt(element.style.left),
-        y: parseInt(element.style.top),
-        width: parseInt(element.style.width),
-        height: parseInt(element.style.height),
-        content: textContent.innerHTML,
+        x: parseInt(element.style.left) || 0,
+        y: parseInt(element.style.top) || 0,
+        width: parseInt(element.style.width) || 200,
+        height: parseInt(element.style.height) || 60,
+        content: textContent.innerHTML || '',
         fontSize: parseInt(textContent.style.fontSize) || 16,
         fontWeight: textContent.style.fontWeight || 'normal',
         fontStyle: textContent.style.fontStyle || 'normal',
@@ -289,9 +292,12 @@ function updateTextBlockAndSync(id) {
     const textBlock = updateTextBlockLocal(id);
     if (!textBlock) return;
     
+    // FIXED: Sanitize data before sending
+    const sanitizedTextBlock = sanitizeTextBlockData(textBlock);
+    
     // Send update via SignalR instead of WebSocket
     if (connection && connection.state === signalR.HubConnectionState.Connected) {
-        sendTextBlockUpdate(textBlock);
+        sendTextBlockUpdate(sanitizedTextBlock);
     }
 }
 
@@ -353,21 +359,21 @@ function applyTextBlockUpdate(element, textBlock) {
     textContent.style.textAlign = textBlock.textAlign;
 }
 
-
 function generateUniqueId() {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+// FIXED: Ensure extracted data has correct types
 function extractTextBlockData(element, id) {
     const textContent = element.querySelector('.text-content');
     return {
-        id: id,
+        id: id.toString(),
         type: 'textBlock',
-        x: parseInt(element.style.left),
-        y: parseInt(element.style.top),
-        width: parseInt(element.style.width),
-        height: parseInt(element.style.height),
-        content: textContent.innerHTML,
+        x: parseInt(element.style.left) || 0,
+        y: parseInt(element.style.top) || 0,
+        width: parseInt(element.style.width) || 200,
+        height: parseInt(element.style.height) || 60,
+        content: textContent.innerHTML || '',
         fontSize: parseInt(textContent.style.fontSize) || 16,
         fontWeight: textContent.style.fontWeight || 'normal',
         fontStyle: textContent.style.fontStyle || 'normal',
@@ -384,7 +390,8 @@ function processQueuedUpdates() {
     while (updateQueue.length > 0) {
         const update = updateQueue.shift();
         if (update.type === 'textBlock') {
-            sendTextBlockUpdate(update.data);
+            const sanitizedData = sanitizeTextBlockData(update.data);
+            sendTextBlockUpdate(sanitizedData);
         }
     }
 }
@@ -444,4 +451,21 @@ function showEditConflict(textBlockId) {
         element.style.borderColor = '#dc3545';
         element.title = 'Another user is editing this. Your changes will be applied when you finish editing.';
     }
+}
+
+// FIXED: Moved sanitizeTextBlockData function here (was referenced in websockets.js)
+function sanitizeTextBlockData(textBlock) {
+    return {
+        id: textBlock.id ? textBlock.id.toString() : generateUniqueId(),
+        type: textBlock.type || "textBlock",
+        x: parseInt(textBlock.x) || 0,
+        y: parseInt(textBlock.y) || 0,
+        width: parseInt(textBlock.width) || 200,
+        height: parseInt(textBlock.height) || 60,
+        content: textBlock.content || "",
+        fontSize: parseInt(textBlock.fontSize) || 16,
+        fontWeight: textBlock.fontWeight || "normal",
+        fontStyle: textBlock.fontStyle || "normal",
+        textAlign: textBlock.textAlign || "left"
+    };
 }
