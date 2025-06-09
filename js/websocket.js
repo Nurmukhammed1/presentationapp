@@ -14,9 +14,7 @@ async function connectSignalR() {
     
     connection = new signalR.HubConnectionBuilder()
         .withUrl(hubUrl, {
-            // Add authentication if needed
             accessTokenFactory: () => {
-                // Return your auth token here if needed
                 return sessionStorage.getItem('authToken');
             }
         })
@@ -32,7 +30,7 @@ async function connectSignalR() {
         isConnected = true;
         reconnectAttempts = 0;
         
-        // FIXED: Join presentation AFTER connection is established
+        // Join presentation AFTER connection is established
         if (currentPresentation) {
             await joinPresentationSignalR(currentPresentation.id, currentUser.id);
         }
@@ -44,7 +42,7 @@ async function connectSignalR() {
 }
 
 function setupSignalRHandlers() {
-    // FIXED: Better event handling with proper error checking
+    // User management events
     connection.on("UserJoined", (data) => {
         console.log('User joined:', data);
         if (data && data.user) {
@@ -59,16 +57,31 @@ function setupSignalRHandlers() {
         }
     });
     
-    // FIXED: Real-time text block updates
+    // FIXED: Handle user role changes
+    connection.on("UserRoleChanged", (data) => {
+        console.log('User role changed:', data);
+        if (data && data.userId && data.role) {
+            handleUserRoleChanged(data);
+        }
+    });
+    
+    // Text block events
     connection.on("TextBlockUpdated", (data) => {
         console.log('Text block updated:', data);
         if (data && data.textBlock && data.userId !== currentUser.id) {
-            // Only update if it's from another user
             updateTextBlockFromRemote(data.textBlock);
         }
     });
     
-    // FIXED: Add missing slide synchronization events
+    // NEW: Handle text block deletion
+    connection.on("TextBlockDeleted", (data) => {
+        console.log('Text block deleted remotely:', data);
+        if (data && data.textBlockId && data.userId !== currentUser.id) {
+            handleRemoteTextBlockDeletion(data.textBlockId);
+        }
+    });
+    
+    // Slide events
     connection.on("SlideChanged", (data) => {
         if (data && data.slideIndex !== undefined) {
             handleSlideChanged(data.slideIndex);
@@ -104,7 +117,6 @@ function setupSignalRHandlers() {
         isConnected = true;
         showConnectionStatus('Connected');
         
-        // FIXED: Rejoin presentation and sync state after reconnection
         if (currentPresentation) {
             joinPresentationSignalR(currentPresentation.id, currentUser.id);
             syncCurrentState();
@@ -112,7 +124,73 @@ function setupSignalRHandlers() {
     });
 }
 
-// FIXED: Proper SignalR method calls with error handling and correct GUID format
+// Enhanced event handlers
+function handleUserJoined(user) {
+    if (typeof users !== 'undefined') {
+        // Check if user already exists (avoid duplicates)
+        const existingUserIndex = users.findIndex(u => u.id === user.id);
+        if (existingUserIndex === -1) {
+            users.push(user);
+        } else {
+            // Update existing user data
+            users[existingUserIndex] = user;
+        }
+        
+        if (typeof updateUsersList === 'function') {
+            updateUsersList();
+        }
+    }
+}
+
+function handleUserLeft(userId) {
+    if (typeof users !== 'undefined') {
+        users = users.filter(u => u.id !== userId);
+        if (typeof updateUsersList === 'function') {
+            updateUsersList();
+        }
+    }
+}
+
+// NEW: Handle user role changes
+function handleUserRoleChanged(data) {
+    if (typeof users !== 'undefined') {
+        const user = users.find(u => u.id === data.userId);
+        if (user) {
+            user.role = data.role;
+            
+            if (typeof updateUsersList === 'function') {
+                updateUsersList();
+            }
+            
+            // If it's the current user, update UI permissions
+            if (data.userId === currentUser.id) {
+                if (typeof updateUIBasedOnRole === 'function') {
+                    updateUIBasedOnRole();
+                }
+            }
+        }
+    }
+}
+
+// NEW: Handle remote text block deletion
+function handleRemoteTextBlockDeletion(textBlockId) {
+    const element = document.getElementById(`textBlock-${textBlockId}`);
+    if (element) {
+        element.remove();
+        
+        // Remove from slide content data
+        if (typeof removeFromSlideContent === 'function') {
+            removeFromSlideContent(textBlockId);
+        }
+        
+        // Clear selection if this block was selected
+        if (typeof selectedTextBlock !== 'undefined' && selectedTextBlock === textBlockId) {
+            selectedTextBlock = null;
+        }
+    }
+}
+
+// SignalR method calls with proper error handling
 async function joinPresentationSignalR(presentationId, userId) {
     if (!connection || connection.state !== signalR.HubConnectionState.Connected) {
         console.warn('Cannot join presentation - SignalR not connected');
@@ -120,7 +198,6 @@ async function joinPresentationSignalR(presentationId, userId) {
     }
     
     try {
-        // FIXED: Ensure IDs are in proper GUID format (string format)
         const guidPresentationId = typeof presentationId === 'string' ? presentationId : presentationId.toString();
         const guidUserId = typeof userId === 'string' ? userId : userId.toString();
         
@@ -139,7 +216,6 @@ async function leavePresentationSignalR(presentationId, userId) {
     }
     
     try {
-        // FIXED: Ensure IDs are in proper GUID format
         const guidPresentationId = typeof presentationId === 'string' ? presentationId : presentationId.toString();
         const guidUserId = typeof userId === 'string' ? userId : userId.toString();
         
@@ -150,15 +226,13 @@ async function leavePresentationSignalR(presentationId, userId) {
     }
 }
 
-// FIXED: Real-time text block updates with optimistic updates
+// Text block update with optimistic updates
 let pendingUpdates = new Map();
 let updateQueue = [];
 
-// FIXED: Updated sendTextBlockUpdate function with proper data types
 async function sendTextBlockUpdate(textBlock) {
     if (!connection || connection.state !== signalR.HubConnectionState.Connected) {
         console.warn('Cannot send update - SignalR not connected');
-        // Queue the update for when connection is restored
         queueUpdate('textBlock', textBlock);
         return;
     }
@@ -167,30 +241,16 @@ async function sendTextBlockUpdate(textBlock) {
         // Add to pending updates to prevent echo
         pendingUpdates.set(textBlock.id, Date.now());
         
-        // FIXED: Ensure all data types match C# expectations
         const updateData = {
             presentationId: typeof currentPresentation.id === 'string' ? currentPresentation.id : currentPresentation.id.toString(),
-            slideIndex: parseInt(currentSlideIndex) || 0, // Ensure integer
-            textBlock: {
-                id: textBlock.id.toString(), // Ensure string
-                type: textBlock.type || "textBlock",
-                x: parseInt(textBlock.x) || 0, // Ensure integer
-                y: parseInt(textBlock.y) || 0, // Ensure integer
-                width: parseInt(textBlock.width) || 200, // Ensure integer
-                height: parseInt(textBlock.height) || 60, // Ensure integer
-                content: textBlock.content || "", // Ensure string
-                fontSize: parseInt(textBlock.fontSize) || 16, // Ensure integer
-                fontWeight: textBlock.fontWeight || "normal", // Ensure string
-                fontStyle: textBlock.fontStyle || "normal", // Ensure string
-                textAlign: textBlock.textAlign || "left" // Ensure string
-            },
+            slideIndex: parseInt(currentSlideIndex) || 0,
+            textBlock: sanitizeTextBlockData(textBlock),
             userId: typeof currentUser.id === 'string' ? currentUser.id : currentUser.id.toString()
         };
         
-        console.log('Sending text block update:', updateData); // Debug log
+        console.log('Sending text block update:', updateData);
         
         await connection.invoke("UpdateTextBlock", updateData);
-        
         console.log('Text block update sent successfully:', textBlock.id);
         
         // Remove from pending after a delay
@@ -200,110 +260,121 @@ async function sendTextBlockUpdate(textBlock) {
         
     } catch (err) {
         console.error('Failed to send text block update:', err);
-        console.error('Update data was:', updateData); // Debug log
         pendingUpdates.delete(textBlock.id);
         queueUpdate('textBlock', textBlock);
     }
 }
 
-// Handle INCOMING messages from SignalR Hub
-function handleSignalRMessage(data) {
-    console.log('Received SignalR message:', data.type, data);
+// NEW: Send text block deletion
+async function sendTextBlockDelete(textBlockId) {  
+    if (!connection || connection.state !== signalR.HubConnectionState.Connected) {
+        console.warn('Cannot send delete - SignalR not connected');
+        return;
+    }
     
-    switch(data.type) {
-        case 'slide_updated':
-            if (data.slideIndex !== currentSlideIndex) return;
-            updateSlideContent(data.content);
-            break;
-        case 'text_block_updated':
-            // FIXED: Call the function that handles incoming updates, not the one that sends them
-            if (typeof updateTextBlockFromRemote === 'function') {
-                updateTextBlockFromRemote(data.textBlock);
-            } else {
-                console.warn('updateTextBlockFromRemote function not found');
-            }
-            break;
-        case 'user_joined':
-            if (typeof users !== 'undefined') {
-                users.push(data.user);
-                if (typeof updateUsersList === 'function') {
-                    updateUsersList();
-                }
-            }
-            break;
-        case 'user_left':
-            if (typeof users !== 'undefined') {
-                users = users.filter(u => u.id !== data.userId);
-                if (typeof updateUsersList === 'function') {
-                    updateUsersList();
-                }
-            }
-            break;
-        case 'user_role_changed':
-            if (typeof users !== 'undefined') {
-                const user = users.find(u => u.id === data.userId);
-                if (user) {
-                    user.role = data.role;
-                    if (typeof updateUsersList === 'function') {
-                        updateUsersList();
-                    }
-                    if (typeof updateUIBasedOnRole === 'function') {
-                        updateUIBasedOnRole();
-                    }
-                }
-            }
-            break;
-        case 'slide_added':
-            if (typeof slides !== 'undefined') {
-                slides.push(data.slide);
-                if (typeof updateSlidesList === 'function') {
-                    updateSlidesList();
-                }
-            }
-            break;
-        case 'slide_removed':
-            if (typeof slides !== 'undefined') {
-                slides.splice(data.slideIndex, 1);
-                if (currentSlideIndex >= slides.length) {
-                    currentSlideIndex = Math.max(0, slides.length - 1);
-                }
-                if (typeof updateSlidesList === 'function') {
-                    updateSlidesList();
-                }
-                if (typeof loadSlide === 'function') {
-                    loadSlide(currentSlideIndex);
-                }
-            }
-            break;
-        default:
-            console.warn('Unknown SignalR message type:', data.type);
+    try {
+        const deleteData = {
+            presentationId: typeof currentPresentation.id === 'string' ? currentPresentation.id : currentPresentation.id.toString(),
+            slideIndex: parseInt(currentSlideIndex) || 0,
+            textBlockId: textBlockId.toString(),
+            userId: typeof currentUser.id === 'string' ? currentUser.id : currentUser.id.toString()
+        };
+        
+        await connection.invoke("DeleteTextBlock", deleteData);
+        console.log('Text block delete sent successfully:', textBlockId);
+    } catch (err) {
+        console.error('Failed to send text block delete:', err);
     }
 }
 
-// Initialize connection when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    connectSignalR();
-});
-
-// Clean up connection when page unloads
-window.addEventListener('beforeunload', function() {
-    if (connection) {
-        connection.stop();
+// NEW: Send user role change
+async function sendUserRoleChange(userId, newRole) {
+    if (!connection || connection.state !== signalR.HubConnectionState.Connected) {
+        console.warn('Cannot send role change - SignalR not connected');
+        return false;
     }
-});
 
-// Helper function for text block changes
-function onTextBlockChanged(textBlock) {
-    // Update locally first for immediate feedback
-    if (typeof updateTextBlockLocal === 'function') {
-        updateTextBlockLocal(textBlock.id);
+    try {
+        const roleChangeData = {
+            presentationId: typeof currentPresentation.id === 'string' ? currentPresentation.id : currentPresentation.id.toString(),
+            userId: typeof userId === 'string' ? userId : userId.toString(),
+            newRole: newRole,
+            requesterId: typeof currentUser.id === 'string' ? currentUser.id : currentUser.id.toString()
+        };
+
+        await connection.invoke("ChangeUserRole", roleChangeData);
+        console.log('Role change request sent successfully');
+        return true;
+    } catch (err) {
+        console.error('Failed to send role change:', err);
+        return false;
     }
-    
-    // Then send to SignalR for other users
-    sendTextBlockUpdate(textBlock);
 }
 
-// FIXED: Helper function to ensure proper data types
+// Queue management for offline updates
+function queueUpdate(type, data) {
+    updateQueue.push({ type, data, timestamp: Date.now() });
+    
+    // Limit queue size
+    if (updateQueue.length > 50) {
+        updateQueue.shift();
+    }
+}
+
+function processQueuedUpdates() {
+    if (!isConnected || updateQueue.length === 0) return;
+    
+    console.log(`Processing ${updateQueue.length} queued updates`);
+    
+    const updates = [...updateQueue];
+    updateQueue = [];
+    
+    updates.forEach(update => {
+        switch(update.type) {
+            case 'textBlock':
+                sendTextBlockUpdate(update.data);
+                break;
+            case 'delete':
+                sendTextBlockDelete(update.data);
+                break;
+            case 'roleChange':
+                sendUserRoleChange(update.data.userId, update.data.role);
+                break;
+        }
+    });
+}
+
+// Connection failure handling
+function handleConnectionFailure() {
+    showConnectionStatus('Disconnected');
+    
+    if (reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        const delay = Math.pow(2, reconnectAttempts) * 1000; // Exponential backoff
+        
+        console.log(`Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts})`);
+        
+        setTimeout(() => {
+            connectSignalR();
+        }, delay);
+    } else {
+        console.error('Max reconnection attempts reached');
+        showConnectionStatus('Connection Failed');
+    }
+}
+
+// Sync current state after reconnection
+function syncCurrentState() {
+    // Refresh user list and presentation data
+    if (typeof loadPresentationData === 'function') {
+        loadPresentationData(currentPresentation.id);
+    }
+    
+    // Process any queued updates
+    processQueuedUpdates();
+}
+
+// Helper functions
 function sanitizeTextBlockData(textBlock) {
     return {
         id: textBlock.id ? textBlock.id.toString() : generateUniqueId(),
@@ -319,3 +390,74 @@ function sanitizeTextBlockData(textBlock) {
         textAlign: textBlock.textAlign || "left"
     };
 }
+
+function showConnectionStatus(status) {
+    console.log('Connection status:', status);
+    
+    // Update UI to show connection status
+    const statusElement = document.getElementById('connectionStatus');
+    if (statusElement) {
+        statusElement.textContent = status;
+        statusElement.className = `connection-status ${status.toLowerCase().replace(' ', '-')}`;
+    }
+    
+    // Show toast notification for important status changes
+    if (typeof showToast === 'function') {
+        if (status === 'Connected') {
+            showToast('Connected to real-time updates', 'success');
+        } else if (status === 'Connection Failed') {
+            showToast('Real-time updates unavailable', 'error');
+        }
+    }
+}
+
+function generateUniqueId() {
+    return 'textblock-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+}
+
+// Helper function for text block changes
+function onTextBlockChanged(textBlock) {
+    // Update locally first for immediate feedback
+    if (typeof updateTextBlockLocal === 'function') {
+        updateTextBlockLocal(textBlock.id);
+    }
+    
+    // Then send to SignalR for other users
+    sendTextBlockUpdate(textBlock);
+}
+
+// Initialize connection when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    connectSignalR();
+});
+
+// Clean up connection when page unloads
+window.addEventListener('beforeunload', function() {
+    if (connection && currentPresentation && currentUser) {
+        // Try to leave presentation gracefully
+        leavePresentationSignalR(currentPresentation.id, currentUser.id);
+    }
+    
+    if (connection) {
+        connection.stop();
+    }
+});
+
+// Retry connection on visibility change (when user returns to tab)
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && !isConnected) {
+        console.log('Page became visible, attempting to reconnect...');
+        connectSignalR();
+    }
+});
+
+// Export functions for use in other scripts
+window.signalRUtils = {
+    connectSignalR,
+    sendTextBlockUpdate,
+    sendTextBlockDelete,
+    sendUserRoleChange,
+    joinPresentationSignalR,
+    leavePresentationSignalR,
+    isConnected: () => isConnected
+};

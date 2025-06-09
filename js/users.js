@@ -1,18 +1,18 @@
-// User Management
+// Updated users.js functions
 function updateUsersList() {
     const usersList = document.getElementById('usersList');
     const userCount = document.getElementById('userCount');
-    
+         
     userCount.textContent = users.length;
     usersList.innerHTML = '';
-    
+         
     users.forEach(user => {
         const userElement = document.createElement('div');
         userElement.className = 'user-item';
-        
+                 
         const avatarColor = `hsl(${user.nickname.length * 30 % 360}, 70%, 50%)`;
         const initial = user.nickname.charAt(0).toUpperCase();
-        
+                 
         userElement.innerHTML = `
             <div class="user-info">
                 <div class="user-avatar" style="background-color: ${avatarColor}">
@@ -37,27 +37,47 @@ function updateUsersList() {
                 </div>
             ` : ''}
         `;
-        
+                 
         usersList.appendChild(userElement);
     });
 }
 
+// UPDATED: Use SignalR for role changes instead of direct API calls
 async function changeUserRole(userId, newRole) {
+    if (!connection || connection.state !== signalR.HubConnectionState.Connected) {
+        console.warn('Cannot change user role - SignalR not connected');
+        return;
+    }
+
     try {
-        const response = await fetch(`https://collab-slides.runasp.net/api/Presentations/${currentPresentation.id}/users/${userId}/role`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                role: newRole,
-                requesterId: currentUser.id 
-            })
-        });
-        
-        if (response.ok) {
-            // Role change will be handled by WebSocket message
-        }
+        const roleChangeData = {
+            presentationId: typeof currentPresentation.id === 'string' ? currentPresentation.id : currentPresentation.id.toString(),
+            userId: typeof userId === 'string' ? userId : userId.toString(),
+            newRole: newRole,
+            requesterId: typeof currentUser.id === 'string' ? currentUser.id : currentUser.id.toString()
+        };
+
+        await connection.invoke("ChangeUserRole", roleChangeData);
+        console.log('Role change request sent successfully');
     } catch (error) {
         console.error('Failed to change user role:', error);
+        // Fallback to API call if SignalR fails
+        try {
+            const response = await fetch(`https://collab-slides.runasp.net/api/Presentations/${currentPresentation.id}/users/${userId}/role`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    role: newRole,
+                    requesterId: currentUser.id
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('API call failed');
+            }
+        } catch (apiError) {
+            console.error('Both SignalR and API calls failed:', apiError);
+        }
     }
 }
 

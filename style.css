@@ -331,7 +331,7 @@ body {
     border: 2px dashed transparent;
     min-width: 100px;
     min-height: 40px;
-    cursor: move;
+    /*cursor: move;*/
     transition: border-color 0.2s ease;
     background: rgba(255, 255, 255, 0.9);
     padding: 8px;
@@ -362,6 +362,11 @@ body {
     outline: none;
     min-height: 20px;
     width: 100%;
+    cursor: text;
+}
+
+.text-block:not(.text-content) {
+    cursor: move;
 }
 
 /* Formatting Toolbar */

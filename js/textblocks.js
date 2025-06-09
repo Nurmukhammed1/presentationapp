@@ -62,7 +62,7 @@ function createTextBlockElement(textBlock) {
                 <i class="fas fa-trash text-danger"></i>
             </button>
         </div>
-        <div class="text-content" contenteditable="${canEdit()}" 
+        <div class="text-content" contenteditable="true" 
              style="font-size: ${textBlock.fontSize}px; font-weight: ${textBlock.fontWeight}; 
                     font-style: ${textBlock.fontStyle}; text-align: ${textBlock.textAlign};">
             ${textBlock.content}
@@ -80,11 +80,19 @@ function createTextBlockElement(textBlock) {
     const textContent = element.querySelector('.text-content');
     textContent.addEventListener('input', () => debounceUpdate(textBlock.id));
     textContent.addEventListener('blur', () => updateTextBlockAndSync(textBlock.id));
+    textContent.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (canEdit()) {
+        textContent.focus();
+    }
+    });
     
     const resizeHandle = element.querySelector('.resize-handle');
     resizeHandle.addEventListener('mousedown', (e) => startResize(e, textBlock.id));
     
     document.getElementById('slideCanvas').appendChild(element);
+
+    
 }
 
 function selectTextBlock(id) {
@@ -234,15 +242,40 @@ function alignText(alignment) {
 
 function deleteTextBlock(id) {
     if (!canEdit()) return;
-    
+
     const element = document.getElementById(`textBlock-${id}`);
     if (element) {
+        // Remove locally first for immediate feedback
         element.remove();
         removeFromSlideContent(id);
         if (selectedTextBlock === id) {
             selectedTextBlock = null;
         }
-        // TODO: Send delete notification via SignalR if needed
+        
+        // Send delete notification via SignalR
+        sendTextBlockDelete(id);
+    }
+}
+
+// NEW: Send text block deletion via SignalR
+async function sendTextBlockDelete(textBlockId) {  
+    if (!connection || connection.state !== signalR.HubConnectionState.Connected) {
+        console.warn('Cannot send delete - SignalR not connected');
+        return;
+    }
+    
+    try {
+        const deleteData = {
+            presentationId: typeof currentPresentation.id === 'string' ? currentPresentation.id : currentPresentation.id.toString(),
+            slideIndex: parseInt(currentSlideIndex) || 0,
+            textBlockId: textBlockId.toString(),
+            userId: typeof currentUser.id === 'string' ? currentUser.id : currentUser.id.toString()
+        };
+        
+        await connection.invoke("DeleteTextBlock", deleteData);
+        console.log('Text block delete sent successfully:', textBlockId);
+    } catch (err) {
+        console.error('Failed to send text block delete:', err);
     }
 }
 
@@ -469,3 +502,5 @@ function sanitizeTextBlockData(textBlock) {
         textAlign: textBlock.textAlign || "left"
     };
 }
+
+
